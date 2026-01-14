@@ -29,6 +29,10 @@ class Settings:
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
     ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", None)
 
+    # AI Model Configuration
+    # Default to deepseek-reasoner for better reasoning capabilities
+    AI_MODEL = os.getenv("AI_MODEL", "deepseek-reasoner")
+
     # Rate limits
     MAX_CLAUDE_REQUESTS_PER_MINUTE = int(os.getenv("MAX_CLAUDE_REQUESTS_PER_MINUTE", "50"))
     MAX_WIKIPEDIA_REQUESTS_PER_MINUTE = int(os.getenv("MAX_WIKIPEDIA_REQUESTS_PER_MINUTE", "100"))
@@ -37,6 +41,11 @@ class Settings:
     BATCH_SIZE = int(os.getenv("BATCH_SIZE", "10"))
     ENABLE_WIKIPEDIA = os.getenv("ENABLE_WIKIPEDIA", "true").lower() == "true"
     ENABLE_GOVERNMENT_SCRAPING = os.getenv("ENABLE_GOVERNMENT_SCRAPING", "false").lower() == "true"
+
+    # AI Enhancement Strategy
+    # Set to True to use new section selection mode (AI chooses which sections to read)
+    # Set to False to use legacy multi-stage mode (pre-selected chunks)
+    USE_SECTION_SELECTION = os.getenv("USE_SECTION_SELECTION", "true").lower() == "true"
 
     # Output options
     OUTPUT_ENCODING = os.getenv("OUTPUT_ENCODING", "utf-8-sig")

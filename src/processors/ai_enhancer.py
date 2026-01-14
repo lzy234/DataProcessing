@@ -31,14 +31,15 @@ class ClaudeAIEnhancer:
             max_calls=Settings.MAX_CLAUDE_REQUESTS_PER_MINUTE,
             period=60
         )
-        # Use Deepseek Chat model
-        self.model = "deepseek-chat"
+        # Use AI model from settings (default: deepseek-reasoner for better reasoning)
+        self.model = Settings.AI_MODEL
 
         # Load cache if exists
         self.cache_file = Settings.AI_RESPONSES_CACHE_FILE
         self.cache = self._load_cache()
 
         logger.info(f"Initialized ClaudeAIEnhancer with model {self.model}")
+        logger.info(f"Using API endpoint: {Settings.ANTHROPIC_BASE_URL}")
 
     def _load_cache(self) -> Dict:
         """Load cached AI responses from file."""
@@ -63,10 +64,55 @@ class ClaudeAIEnhancer:
 
     def enhance_batch(self, people: List[Dict], wikipedia_data: Dict = None) -> List[Dict]:
         """
-        Enhance a batch of people with AI-completed data using multiple specialized requests.
+        Enhance a batch of people with AI-completed data.
+
+        Routes to either new section-selection mode or legacy multi-stage mode
+        based on Settings.USE_SECTION_SELECTION configuration.
+
+        Args:
+            people: List of person dictionaries (up to 10)
+            wikipedia_data: Optional Wikipedia data keyed by person name
+
+        Returns:
+            List of enhanced person dictionaries with completed fields
+        """
+        # Check if USE_SECTION_SELECTION is enabled
+        use_section_selection = getattr(Settings, 'USE_SECTION_SELECTION', False)
+
+        if use_section_selection:
+            # Use new section selection mode
+            logger.info("Using AI section selection mode")
+            return self._enhance_batch_with_sections(people, wikipedia_data)
+        else:
+            # Use legacy multi-stage mode
+            logger.info("Using legacy multi-stage mode")
+            return self._enhance_batch_legacy(people, wikipedia_data)
+
+    def _enhance_batch_with_sections(self, people: List[Dict], wikipedia_data: Dict = None) -> List[Dict]:
+        """
+        Enhance batch using new section selection approach.
+
+        Args:
+            people: List of person dictionaries
+            wikipedia_data: Wikipedia data with sections field
+
+        Returns:
+            List of enhanced person dictionaries
+        """
+        try:
+            from src.processors.ai_enhancer_with_sections import ClaudeAIEnhancerWithSections
+            enhancer = ClaudeAIEnhancerWithSections()
+            return enhancer.enhance_batch(people, wikipedia_data)
+        except Exception as e:
+            logger.error(f"Section selection mode failed: {e}, falling back to legacy mode")
+            return self._enhance_batch_legacy(people, wikipedia_data)
+
+    def _enhance_batch_legacy(self, people: List[Dict], wikipedia_data: Dict = None) -> List[Dict]:
+        """
+        Legacy: Enhance a batch of people with AI-completed data using multiple specialized requests.
 
         This method splits the enhancement into 5 separate API calls:
-        1. Basic info (dateOfBirth, gender) - lightweight fields
+        1. Basic info (dateOfBirth, gender, party) - lightweight fields
         2. Education - detailed educational background
         3. Career History - professional timeline
         4. Biography - comprehensive bio text
@@ -82,7 +128,7 @@ class ClaudeAIEnhancer:
         if len(people) > Settings.BATCH_SIZE:
             logger.warning(f"Batch size {len(people)} exceeds limit {Settings.BATCH_SIZE}")
 
-        logger.info(f"Enhancing batch of {len(people)} people with Claude API (multi-stage)")
+        logger.info(f"Enhancing batch of {len(people)} people with Claude API (multi-stage legacy mode)")
 
         enhanced_results = []
 
@@ -95,6 +141,7 @@ class ClaudeAIEnhancer:
                 "name": name,
                 "dateOfBirth": None,
                 "gender": "",
+                "party": "",
                 "education": "",
                 "careerHistory": "",
                 "bio": "",
@@ -105,10 +152,11 @@ class ClaudeAIEnhancer:
             all_sources = []
 
             try:
-                # Stage 1: Basic Info (dateOfBirth, gender)
+                # Stage 1: Basic Info (dateOfBirth, gender, party)
                 basic_info = self._enhance_basic_info(person, wiki)
                 enhanced["dateOfBirth"] = basic_info.get("dateOfBirth")
                 enhanced["gender"] = basic_info.get("gender", "")
+                enhanced["party"] = basic_info.get("party", "")
                 all_sources.extend(basic_info.get("sources", []))
 
                 # Stage 2: Education
@@ -172,23 +220,50 @@ class ClaudeAIEnhancer:
         if wiki.get('chunks'):
             chunks = wiki['chunks']
 
-            # If keywords provided, score and sort chunks
-            if keywords:
-                scored_chunks = []
-                for chunk in chunks:
-                    score = chunk.get('is_intro', False) * 100  # Intro always high priority
-                    text_lower = chunk['text'].lower()
+            # Filter out chunks that are mostly navigation/table of contents
+            # Real biographical content usually contains "born" or full sentences
+            filtered_chunks = []
+            for chunk in chunks:
+                text = chunk['text']
+                # Check if this looks like actual content (not TOC)
+                # TOC chunks have lots of short lines and few full sentences
+                lines = text.strip().split('\n')
+                short_lines = sum(1 for line in lines if len(line.strip()) < 50)
+                long_content = any('born' in text.lower() or len(line) > 100 for line in lines)
+
+                # Keep chunks that have substantial content
+                if long_content or (len(lines) - short_lines) > 3:
+                    filtered_chunks.append(chunk)
+
+            if not filtered_chunks:
+                filtered_chunks = chunks  # Fallback to all chunks
+
+            # Always score and sort chunks to prioritize biographical content
+            scored_chunks = []
+            for chunk in filtered_chunks:
+                score = chunk.get('is_intro', False) * 100  # Intro always high priority
+                text_lower = chunk['text'].lower()
+
+                # Bonus for biographical indicators
+                if 'born' in text_lower:
+                    score += 50
+                if ' is an american' in text_lower or ' is a ' in text_lower:
+                    score += 30
+
+                # If keywords provided, add keyword scoring
+                if keywords:
                     for keyword in keywords:
                         if keyword.lower() in text_lower:
                             score += 10
-                    scored_chunks.append((score, chunk))
 
-                scored_chunks.sort(reverse=True, key=lambda x: x[0])
-                chunks = [chunk for score, chunk in scored_chunks]
+                scored_chunks.append((score, chunk))
+
+            scored_chunks.sort(reverse=True, key=lambda x: x[0])
+            filtered_chunks = [chunk for score, chunk in scored_chunks]
 
             # Combine chunks up to max_chars
             combined_text = ""
-            for chunk in chunks:
+            for chunk in filtered_chunks:
                 chunk_text = chunk['text']
                 if len(combined_text) + len(chunk_text) + 10 <= max_chars:
                     section_header = f"\n\n=== {chunk['section']} ===\n" if chunk['section'] != 'Introduction' else ""
@@ -206,7 +281,7 @@ class ClaudeAIEnhancer:
 
     def _enhance_basic_info(self, person: Dict, wiki: Dict) -> Dict:
         """
-        Extract basic info (dateOfBirth, gender) from Wikipedia data only.
+        Extract basic info (dateOfBirth, gender, party) from Wikipedia data only.
         No AI inference - only use reliable sources.
         """
         cache_key = f"{person.get('name', '')}_basic"
@@ -216,10 +291,11 @@ class ClaudeAIEnhancer:
         result = {
             "dateOfBirth": None,
             "gender": "",
+            "party": "",
             "sources": []
         }
 
-        # Extract dateOfBirth from Wikipedia
+        # Extract dateOfBirth from Wikipedia structured data
         if wiki.get('birth_date'):
             result["dateOfBirth"] = wiki['birth_date']
             result["sources"].append({
@@ -228,36 +304,56 @@ class ClaudeAIEnhancer:
                 "reliability": "high"
             })
 
-        # For gender, we only extract from Wikipedia if available
-        # No inference from Chinese text
+        # For gender and party, we extract from Wikipedia text using AI
         if wiki:
             # Get relevant text from chunks (intro preferred)
-            wiki_extract = self._get_relevant_text(wiki, max_chars=800)
+            # Use 3000 chars for better coverage of biographical info
+            wiki_extract = self._get_relevant_text(wiki, max_chars=3000)
             if wiki_extract:
-                # Simple extraction from Wikipedia text
-                prompt = f"""Based ONLY on the following Wikipedia text, extract the gender if explicitly mentioned.
+                # Extract gender, party, and potentially dateOfBirth from Wikipedia text
+                prompt = f"""Based ONLY on the following Wikipedia text, extract basic biographical information.
+
+Person: {person.get('name', '')}
 
 Wikipedia text:
 {wiki_extract}
 
 Respond with ONLY a JSON object in this exact format:
 {{
-  "gender": "male" or "female" or "" (empty string if not explicitly mentioned)
+  "gender": "male" or "female" or "" (empty string if not explicitly mentioned),
+  "party": "Republican" or "Democratic" or "Independent" or "" (empty string if not mentioned or not a politician),
+  "dateOfBirth": "YYYY-MM-DD format" or null (if birth date is mentioned but not already provided)
 }}
 
 IMPORTANT:
-- Only use gender if it's explicitly stated in the Wikipedia text
-- If uncertain or not mentioned, use empty string ""
+- For gender: Look for pronouns (he/she/his/her) or explicit mentions. Only use if clear.
+- For party: Look for "Republican Party", "Democratic Party", "Democrat", "member of the Republican/Democratic Party", etc.
+  - Use "Republican" or "Democratic" (singular form)
+  - Only extract if the person is a current or former member of a political party
+  - If the person switched parties, use the CURRENT party affiliation
+- For dateOfBirth: Only extract if explicitly mentioned and in a clear date format (e.g., "born June 14, 1946")
+- If uncertain about any field, use empty string "" or null
 - Do not infer or guess"""
 
-            try:
-                with self.rate_limiter:
-                    response = self._call_claude_simple(prompt)
-                    gender_data = json.loads(response)
-                    if gender_data.get('gender'):
-                        result["gender"] = gender_data['gender']
-            except Exception as e:
-                logger.warning(f"Failed to extract gender for {person.get('name', '')}: {e}")
+                try:
+                    with self.rate_limiter:
+                        response = self._call_claude_simple(prompt)
+                        basic_data = json.loads(response)
+
+                        # Extract gender
+                        if basic_data.get('gender'):
+                            result["gender"] = basic_data['gender']
+
+                        # Extract party
+                        if basic_data.get('party'):
+                            result["party"] = basic_data['party']
+
+                        # Extract dateOfBirth if not already set
+                        if not result["dateOfBirth"] and basic_data.get('dateOfBirth'):
+                            result["dateOfBirth"] = basic_data['dateOfBirth']
+
+                except Exception as e:
+                    logger.warning(f"Failed to extract basic info for {person.get('name', '')}: {e}")
 
         self.cache[cache_key] = result
         self._save_cache()
@@ -283,10 +379,11 @@ IMPORTANT:
             return result
 
         # Get relevant text chunks prioritizing education-related content
+        # Increased from 3000 to 6000 for better coverage of educational background
         wiki_extract = self._get_relevant_text(
             wiki,
             keywords=['education', 'university', 'college', 'graduated', 'degree', 'studied'],
-            max_chars=3000
+            max_chars=6000
         )
 
         if not wiki_extract:
@@ -349,10 +446,11 @@ IMPORTANT:
             return result
 
         # Get relevant text chunks prioritizing career-related content
+        # Increased from 3500 to 8000 for better coverage of career history
         wiki_extract = self._get_relevant_text(
             wiki,
             keywords=['career', 'elected', 'appointed', 'served', 'position', 'founded', 'work'],
-            max_chars=3500
+            max_chars=8000
         )
 
         if not wiki_extract:
@@ -419,10 +517,11 @@ IMPORTANT:
             return result
 
         # Get relevant text chunks - prioritize biographical sections
+        # Increased from 4000 to 10000 for comprehensive biography generation
         wiki_extract = self._get_relevant_text(
             wiki,
             keywords=['born', 'early life', 'career', 'education', 'political'],
-            max_chars=4000  # Larger for biography
+            max_chars=10000  # Larger for biography
         )
 
         if not wiki_extract:
@@ -493,10 +592,11 @@ IMPORTANT:
             return result
 
         # Get relevant text chunks - prioritize intro and recent career sections
+        # Increased from 2000 to 4000 for better organization extraction
         wiki_extract = self._get_relevant_text(
             wiki,
             keywords=['current', 'serves', 'member', 'senator', 'representative', current_role.lower()],
-            max_chars=2000
+            max_chars=4000
         )
 
         if not wiki_extract:
@@ -589,6 +689,7 @@ IMPORTANT:
             "name": person.get('name', ''),
             "dateOfBirth": None,
             "gender": "",
+            "party": "",
             "education": "",
             "careerHistory": "",
             "bio": "",

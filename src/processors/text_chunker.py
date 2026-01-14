@@ -99,6 +99,8 @@ class TextChunker:
 
         Looks for common section markers like:
         == Section Name ==
+        === Subsection Name ===
+        ==== Details ====
 
         Args:
             text: Full Wikipedia text
@@ -108,8 +110,9 @@ class TextChunker:
         """
         sections = []
 
-        # Split by section headers (== Header ==)
-        section_pattern = r'\n==\s*([^=]+)\s*==\n'
+        # Split by section headers (== Header ==, === Header ===, ==== Header ====)
+        # This pattern matches any level of heading (2 or more = signs)
+        section_pattern = r'\n(==+)\s*([^=]+?)\s*\1\n'
         matches = list(re.finditer(section_pattern, text))
 
         if not matches:
@@ -132,17 +135,22 @@ class TextChunker:
 
         # Extract all other sections
         for i, match in enumerate(matches):
-            section_name = match.group(1).strip()
+            heading_markers = match.group(1)  # The == signs
+            section_name = match.group(2).strip()
             start = match.end()
             end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
             section_text = text[start:end].strip()
+
+            # Calculate heading level (number of = signs)
+            heading_level = len(heading_markers)
 
             # Skip empty or very short sections
             if len(section_text) > 50:
                 sections.append({
                     'name': section_name,
                     'text': section_text,
-                    'is_intro': False
+                    'is_intro': False,
+                    'heading_level': heading_level
                 })
 
         return sections

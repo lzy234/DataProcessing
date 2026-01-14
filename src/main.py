@@ -177,8 +177,15 @@ class DataProcessingPipeline:
 
         enhanced_people = []
 
-        # Process in batches with progress bar
-        for i in tqdm(range(0, len(people), batch_size), desc="AI Enhancement"):
+        # Process in batches with progress bar (disable in non-interactive mode)
+        import sys
+        use_tqdm = sys.stderr.isatty()
+
+        batch_iterator = range(0, len(people), batch_size)
+        if use_tqdm:
+            batch_iterator = tqdm(batch_iterator, desc="AI Enhancement")
+
+        for i in batch_iterator:
             batch = people[i:i + batch_size]
             batch_num = (i // batch_size) + 1
 

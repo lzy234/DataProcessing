@@ -110,13 +110,21 @@ class WikipediaExtractor:
             # Preprocess the text (clean and structure)
             wiki_data = self.preprocessor.preprocess(wiki_data)
 
-            # Create intelligent chunks
+            # Parse sections from the extract
+            sections = self.chunker._parse_sections(wiki_data['extract'])
+
+            # Build table of contents for AI
+            toc = self._build_table_of_contents(sections)
+
+            # Add sections and ToC to wiki_data
+            wiki_data['sections'] = sections
+            wiki_data['table_of_contents'] = toc
+
+            # Also create chunks for backward compatibility
             chunks = self.chunker.chunk_text(wiki_data['extract'], name)
+            prioritized_chunks = self.chunker.prioritize_chunks(chunks, max_chunks=10)
 
-            # Prioritize most relevant chunks
-            prioritized_chunks = self.chunker.prioritize_chunks(chunks, max_chunks=5)
-
-            # Add chunks to wiki_data
+            # Add chunks to wiki_data (for backward compatibility)
             wiki_data['chunks'] = prioritized_chunks
             wiki_data['total_chunks'] = len(chunks)
             wiki_data['text_length'] = len(wiki_data['extract'])
@@ -259,6 +267,10 @@ class WikipediaExtractor:
                     self.text.append('\n\n=== ')
                     self.in_heading = True
                     self.heading_level = 3
+                elif tag == 'h4':
+                    self.text.append('\n\n==== ')
+                    self.in_heading = True
+                    self.heading_level = 4
 
             def handle_endtag(self, tag):
                 if tag in ['table', 'style', 'script']:
@@ -270,6 +282,9 @@ class WikipediaExtractor:
                     self.in_heading = False
                 elif tag == 'h3' and self.in_heading:
                     self.text.append(' ===\n')
+                    self.in_heading = False
+                elif tag == 'h4' and self.in_heading:
+                    self.text.append(' ====\n')
                     self.in_heading = False
 
             def handle_data(self, data):
@@ -301,6 +316,33 @@ class WikipediaExtractor:
         logger.debug(f"Fetched full content for {page_title}: {len(plain_text)} chars")
 
         return result
+
+    def _build_table_of_contents(self, sections: List[Dict]) -> str:
+        """
+        Build a concise table of contents string for AI consumption.
+
+        Args:
+            sections: List of section dictionaries from _parse_sections
+
+        Returns:
+            Formatted table of contents string
+        """
+        lines = []
+        for sec in sections:
+            # Get indentation based on heading level
+            heading_level = sec.get('heading_level', 0)
+            if heading_level > 0:
+                indent = "  " * (heading_level - 2)  # h2 has no indent, h3 has 2 spaces, etc.
+            else:
+                indent = ""  # Introduction has no indent
+
+            name = sec['name']
+            length = len(sec['text'])
+
+            # Format: "- Section Name (1234 chars)"
+            lines.append(f"{indent}- {name} ({length} chars)")
+
+        return "\n".join(lines)
 
     def _extract_bio_data(self, summary: Dict, person_name: str) -> Dict:
         """
