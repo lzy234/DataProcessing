@@ -24,6 +24,14 @@ data/output/*
 !data/intermediate/.gitkeep
 !data/output/.gitkeep
 
+# Test outputs
+test_output/
+
+# Temporary files
+nul
+*.tmp
+config/newkey
+
 # Logs
 *.log
 

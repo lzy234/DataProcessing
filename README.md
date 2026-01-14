@@ -62,7 +62,7 @@ python src/main.py
 
 ```
 DataProcessing/
-├── src/
+├── src/                  # 源代码
 │   ├── config/           # 配置管理
 │   ├── extractors/       # 数据提取（CSV、Wikipedia）
 │   ├── processors/       # 数据处理（AI增强、实体识别）
@@ -70,15 +70,30 @@ DataProcessing/
 │   ├── exporters/        # CSV导出
 │   ├── utils/            # 工具类（日志、重试、限流）
 │   └── main.py           # 主流程
-├── data/
+├── data/                 # 数据文件
 │   ├── input/            # 原始CSV
 │   ├── intermediate/     # 中间缓存和日志
 │   └── output/           # 最终输出CSV
-├── config/
+├── config/               # 配置文件
 │   ├── .env              # API密钥（gitignored）
 │   ├── sector_mappings.json  # 领域分类规则
 │   └── party_colors.json     # 政党颜色
-└── requirements.txt
+├── tests/                # 测试文件
+│   ├── test_*.py         # 各模块单元测试
+│   └── ...
+├── scripts/              # 实用脚本
+│   ├── check_progress.py     # 检查处理进度
+│   ├── live_monitor.py       # 实时监控
+│   ├── monitor_pipeline.py   # 管道监控
+│   └── quick_status.bat      # 快速状态检查
+├── docs/                 # 文档
+│   ├── PROJECT_PROCESS_GUIDE.md          # 项目流程指南
+│   ├── ORGANIZATION_FEATURES_SUMMARY.md  # 组织功能总结
+│   ├── ORGANIZATION_DEDUPLICATION.md     # 组织去重文档
+│   ├── NEXT_STEPS.md                     # 后续步骤
+│   └── 数据库结构分析报告.md             # 数据库结构分析
+├── requirements.txt      # Python依赖
+└── README.md            # 项目说明
 ```
 
 ## 数据处理流程

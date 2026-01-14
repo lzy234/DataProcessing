@@ -1,7 +1,7 @@
-"""AI-powered data enhancement using Claude API."""
+"""AI-powered data enhancement using Claude API via OpenAI-compatible endpoint."""
 import json
 from typing import Dict, List, Optional
-from anthropic import Anthropic
+from openai import OpenAI
 from src.utils.logger import logger
 from src.utils.retry import retry_with_backoff
 from src.utils.rate_limiter import RateLimiter
@@ -16,12 +16,23 @@ class ClaudeAIEnhancer:
         if not Settings.ANTHROPIC_API_KEY:
             raise ValueError("ANTHROPIC_API_KEY not set in environment")
 
-        self.client = Anthropic(api_key=Settings.ANTHROPIC_API_KEY)
+        if not Settings.ANTHROPIC_BASE_URL:
+            raise ValueError("ANTHROPIC_BASE_URL not set in environment. This is required for OpenAI-compatible endpoint.")
+
+        # Initialize OpenAI client with custom endpoint
+        self.client = OpenAI(
+            api_key=Settings.ANTHROPIC_API_KEY,
+            base_url=Settings.ANTHROPIC_BASE_URL + "/v1",
+            timeout=120.0  # Increase timeout for slower endpoints
+        )
+        logger.info(f"Using OpenAI-compatible API endpoint: {Settings.ANTHROPIC_BASE_URL}/v1")
+
         self.rate_limiter = RateLimiter(
             max_calls=Settings.MAX_CLAUDE_REQUESTS_PER_MINUTE,
             period=60
         )
-        self.model = "claude-3-5-sonnet-20241022"
+        # Use Deepseek Chat model
+        self.model = "deepseek-chat"
 
         # Load cache if exists
         self.cache_file = Settings.AI_RESPONSES_CACHE_FILE
@@ -52,7 +63,14 @@ class ClaudeAIEnhancer:
 
     def enhance_batch(self, people: List[Dict], wikipedia_data: Dict = None) -> List[Dict]:
         """
-        Enhance a batch of people with AI-completed data.
+        Enhance a batch of people with AI-completed data using multiple specialized requests.
+
+        This method splits the enhancement into 5 separate API calls:
+        1. Basic info (dateOfBirth, gender) - lightweight fields
+        2. Education - detailed educational background
+        3. Career History - professional timeline
+        4. Biography - comprehensive bio text
+        5. Organization - extract organization from Wikipedia
 
         Args:
             people: List of person dictionaries (up to 10)
@@ -64,195 +82,495 @@ class ClaudeAIEnhancer:
         if len(people) > Settings.BATCH_SIZE:
             logger.warning(f"Batch size {len(people)} exceeds limit {Settings.BATCH_SIZE}")
 
-        # Check cache first
-        cache_key = self._get_cache_key(people)
-        if cache_key in self.cache:
-            logger.info(f"Using cached response for batch of {len(people)} people")
-            return self.cache[cache_key]
+        logger.info(f"Enhancing batch of {len(people)} people with Claude API (multi-stage)")
 
-        logger.info(f"Enhancing batch of {len(people)} people with Claude API")
+        enhanced_results = []
 
-        try:
-            # Build structured prompt
-            prompt = self._build_batch_prompt(people, wikipedia_data or {})
+        for person in people:
+            name = person.get('name', '')
+            wiki = (wikipedia_data or {}).get(name, {})
 
-            # Call Claude API with rate limiting
-            with self.rate_limiter:
-                enhanced_data = self._call_claude_api(prompt, len(people))
+            # Initialize result with existing data
+            enhanced = {
+                "name": name,
+                "dateOfBirth": None,
+                "gender": "",
+                "education": "",
+                "careerHistory": "",
+                "bio": "",
+                "organization": "",
+                "sources": []
+            }
 
-            # Cache the result
-            self.cache[cache_key] = enhanced_data
-            self._save_cache()
+            all_sources = []
 
-            return enhanced_data
+            try:
+                # Stage 1: Basic Info (dateOfBirth, gender)
+                basic_info = self._enhance_basic_info(person, wiki)
+                enhanced["dateOfBirth"] = basic_info.get("dateOfBirth")
+                enhanced["gender"] = basic_info.get("gender", "")
+                all_sources.extend(basic_info.get("sources", []))
 
-        except Exception as e:
-            logger.error(f"Failed to enhance batch: {e}")
-            # Return degraded data (original data with minimal enhancements)
-            return self._create_degraded_response(people)
+                # Stage 2: Education
+                education_info = self._enhance_education(person, wiki)
+                enhanced["education"] = education_info.get("education", "")
+                all_sources.extend(education_info.get("sources", []))
+
+                # Stage 3: Career History
+                career_info = self._enhance_career_history(person, wiki)
+                enhanced["careerHistory"] = career_info.get("careerHistory", "")
+                all_sources.extend(career_info.get("sources", []))
+
+                # Stage 4: Biography
+                bio_info = self._enhance_biography(person, wiki)
+                enhanced["bio"] = bio_info.get("bio", "")
+                all_sources.extend(bio_info.get("sources", []))
+
+                # Stage 5: Organization (from Wikipedia)
+                org_info = self._extract_organization(person, wiki)
+                enhanced["organization"] = org_info.get("organization", "")
+                all_sources.extend(org_info.get("sources", []))
+
+            except Exception as e:
+                logger.error(f"Failed to enhance {name}: {e}")
+                # Keep empty values for reliability
+
+            # Deduplicate sources by URL
+            seen_urls = set()
+            unique_sources = []
+            for source in all_sources:
+                url = source.get("sourceUrl", "")
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    unique_sources.append(source)
+                elif not url:
+                    unique_sources.append(source)
+
+            enhanced["sources"] = unique_sources
+            enhanced_results.append(enhanced)
+
+        return enhanced_results
 
     def _get_cache_key(self, people: List[Dict]) -> str:
         """Generate cache key from people list."""
         names = [p.get('name', '') for p in people]
         return "|".join(names)
 
-    def _build_batch_prompt(self, people: List[Dict], wikipedia_data: Dict) -> str:
+    def _get_relevant_text(self, wiki: Dict, keywords: List[str] = None, max_chars: int = 3000) -> str:
         """
-        Build structured prompt for batch processing.
-
-        The prompt asks Claude to complete missing fields for multiple people
-        in a single request, returning structured JSON.
-        """
-        people_info = []
-
-        for idx, person in enumerate(people, 1):
-            name = person.get('name', '')
-            wiki = wikipedia_data.get(name, {})
-
-            person_section = f"""
-Person {idx}:
-- Chinese Name: {person.get('ChineseName', 'N/A')}
-- English Name: {name}
-- Current Role/Title: {person.get('currentRole', 'N/A')}
-- Organization: {person.get('organization_text', 'N/A')}
-- Chinese Biography: {person.get('bio_chinese', 'N/A')}
-"""
-
-            if wiki:
-                person_section += f"""- Wikipedia Summary: {wiki.get('extract', 'N/A')}
-- Wikipedia Birth Date: {wiki.get('birth_date', 'N/A')}
-- Wikipedia URL: {wiki.get('url', 'N/A')}
-"""
-
-            people_info.append(person_section)
-
-        prompt = f"""You are a data analyst helping complete biographical information for {len(people)} political figures in the United States.
-
-Below is the available data for each person. Please analyze the information and provide the following fields in structured JSON format:
-
-IMPORTANT INSTRUCTIONS:
-1. For dateOfBirth: Use YYYY-MM-DD format. If exact date unknown, use null.
-2. For gender: Infer from Chinese pronouns (他=male, 她=female) or context. Use "male", "female", or "other".
-3. For education: Summarize their educational background (universities, degrees). If unknown, use empty string.
-4. For careerHistory: Create a brief timeline of major positions held. Focus on political career.
-5. For bio: Write a 200-500 word English biography in neutral, encyclopedic tone. Focus on political influence and career achievements.
-6. For sources: List data sources used with reliability rating ("high", "medium", "low").
-
-INPUT DATA:
-{"".join(people_info)}
-
-OUTPUT FORMAT (valid JSON array):
-[
-  {{
-    "name": "English Name",
-    "dateOfBirth": "YYYY-MM-DD or null",
-    "gender": "male/female/other",
-    "education": "Educational background summary",
-    "careerHistory": "Career timeline with key positions",
-    "bio": "English biography (200-500 words)",
-    "sources": [
-      {{
-        "sourceName": "Source name",
-        "sourceUrl": "URL if available",
-        "reliability": "high/medium/low"
-      }}
-    ]
-  }},
-  ...
-]
-
-Please respond with ONLY the JSON array, no additional text."""
-
-        return prompt
-
-    @retry_with_backoff(max_retries=3, exceptions=(Exception,))
-    def _call_claude_api(self, prompt: str, expected_count: int) -> List[Dict]:
-        """
-        Call Claude API and parse response.
+        Get relevant text from Wikipedia data, preferring chunks if available.
 
         Args:
-            prompt: The structured prompt
-            expected_count: Expected number of people in response
+            wiki: Wikipedia data dictionary
+            keywords: Keywords to prioritize chunks (e.g., ['education', 'university'])
+            max_chars: Maximum characters to return
 
         Returns:
-            List of enhanced person data dictionaries
+            Relevant text string
         """
-        logger.debug(f"Calling Claude API (expecting {expected_count} people)")
+        # If chunks are available, use prioritized chunks
+        if wiki.get('chunks'):
+            chunks = wiki['chunks']
 
-        response = self.client.messages.create(
+            # If keywords provided, score and sort chunks
+            if keywords:
+                scored_chunks = []
+                for chunk in chunks:
+                    score = chunk.get('is_intro', False) * 100  # Intro always high priority
+                    text_lower = chunk['text'].lower()
+                    for keyword in keywords:
+                        if keyword.lower() in text_lower:
+                            score += 10
+                    scored_chunks.append((score, chunk))
+
+                scored_chunks.sort(reverse=True, key=lambda x: x[0])
+                chunks = [chunk for score, chunk in scored_chunks]
+
+            # Combine chunks up to max_chars
+            combined_text = ""
+            for chunk in chunks:
+                chunk_text = chunk['text']
+                if len(combined_text) + len(chunk_text) + 10 <= max_chars:
+                    section_header = f"\n\n=== {chunk['section']} ===\n" if chunk['section'] != 'Introduction' else ""
+                    combined_text += section_header + chunk_text
+                else:
+                    break
+
+            return combined_text.strip()
+
+        # Fallback to full extract (truncated)
+        extract = wiki.get('extract', '')
+        if len(extract) > max_chars:
+            return extract[:max_chars] + "..."
+        return extract
+
+    def _enhance_basic_info(self, person: Dict, wiki: Dict) -> Dict:
+        """
+        Extract basic info (dateOfBirth, gender) from Wikipedia data only.
+        No AI inference - only use reliable sources.
+        """
+        cache_key = f"{person.get('name', '')}_basic"
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+
+        result = {
+            "dateOfBirth": None,
+            "gender": "",
+            "sources": []
+        }
+
+        # Extract dateOfBirth from Wikipedia
+        if wiki.get('birth_date'):
+            result["dateOfBirth"] = wiki['birth_date']
+            result["sources"].append({
+                "sourceName": "Wikipedia",
+                "sourceUrl": wiki.get('url', ''),
+                "reliability": "high"
+            })
+
+        # For gender, we only extract from Wikipedia if available
+        # No inference from Chinese text
+        if wiki:
+            # Get relevant text from chunks (intro preferred)
+            wiki_extract = self._get_relevant_text(wiki, max_chars=800)
+            if wiki_extract:
+                # Simple extraction from Wikipedia text
+                prompt = f"""Based ONLY on the following Wikipedia text, extract the gender if explicitly mentioned.
+
+Wikipedia text:
+{wiki_extract}
+
+Respond with ONLY a JSON object in this exact format:
+{{
+  "gender": "male" or "female" or "" (empty string if not explicitly mentioned)
+}}
+
+IMPORTANT:
+- Only use gender if it's explicitly stated in the Wikipedia text
+- If uncertain or not mentioned, use empty string ""
+- Do not infer or guess"""
+
+            try:
+                with self.rate_limiter:
+                    response = self._call_claude_simple(prompt)
+                    gender_data = json.loads(response)
+                    if gender_data.get('gender'):
+                        result["gender"] = gender_data['gender']
+            except Exception as e:
+                logger.warning(f"Failed to extract gender for {person.get('name', '')}: {e}")
+
+        self.cache[cache_key] = result
+        self._save_cache()
+        return result
+
+    def _enhance_education(self, person: Dict, wiki: Dict) -> Dict:
+        """
+        Extract education information from Wikipedia data only.
+        No AI inference - only use reliable sources.
+        """
+        cache_key = f"{person.get('name', '')}_education"
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+
+        result = {
+            "education": "",
+            "sources": []
+        }
+
+        if not wiki:
+            self.cache[cache_key] = result
+            self._save_cache()
+            return result
+
+        # Get relevant text chunks prioritizing education-related content
+        wiki_extract = self._get_relevant_text(
+            wiki,
+            keywords=['education', 'university', 'college', 'graduated', 'degree', 'studied'],
+            max_chars=3000
+        )
+
+        if not wiki_extract:
+            self.cache[cache_key] = result
+            self._save_cache()
+            return result
+
+        # Use AI to extract education from Wikipedia text
+        prompt = f"""Based ONLY on the following Wikipedia text, extract educational background information.
+
+Wikipedia text:
+{wiki_extract}
+
+Respond with ONLY a JSON object in this exact format:
+{{
+  "education": "Summarize universities, degrees, and graduation years if mentioned. Empty string if no education info found."
+}}
+
+IMPORTANT:
+- Only extract information explicitly mentioned in the Wikipedia text
+- Do not infer or add information not present
+- If no education information is found, return empty string ""
+- Keep the summary concise (1-2 sentences max)"""
+
+        try:
+            with self.rate_limiter:
+                response = self._call_claude_simple(prompt)
+                edu_data = json.loads(response)
+                if edu_data.get('education'):
+                    result["education"] = edu_data['education']
+                    result["sources"].append({
+                        "sourceName": "Wikipedia",
+                        "sourceUrl": wiki.get('url', ''),
+                        "reliability": "high"
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to extract education for {person.get('name', '')}: {e}")
+
+        self.cache[cache_key] = result
+        self._save_cache()
+        return result
+
+    def _enhance_career_history(self, person: Dict, wiki: Dict) -> Dict:
+        """
+        Extract career history from Wikipedia data only.
+        No AI inference - only use reliable sources.
+        """
+        cache_key = f"{person.get('name', '')}_career"
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+
+        result = {
+            "careerHistory": "",
+            "sources": []
+        }
+
+        if not wiki:
+            self.cache[cache_key] = result
+            self._save_cache()
+            return result
+
+        # Get relevant text chunks prioritizing career-related content
+        wiki_extract = self._get_relevant_text(
+            wiki,
+            keywords=['career', 'elected', 'appointed', 'served', 'position', 'founded', 'work'],
+            max_chars=3500
+        )
+
+        if not wiki_extract:
+            self.cache[cache_key] = result
+            self._save_cache()
+            return result
+
+        # Use AI to extract career timeline from Wikipedia text
+        prompt = f"""Based ONLY on the following Wikipedia text, create a career history timeline.
+
+Person: {person.get('name', '')}
+Current Role: {person.get('currentRole', '')}
+
+Wikipedia text:
+{wiki_extract}
+
+Respond with ONLY a JSON object in this exact format:
+{{
+  "careerHistory": "Create a chronological timeline of major positions held. Empty string if no career info found."
+}}
+
+IMPORTANT:
+- Only extract positions and dates explicitly mentioned in the Wikipedia text
+- Do not infer or add information not present
+- If no career information is found, return empty string ""
+- Focus on political and professional career
+- Keep it concise (3-5 sentences max)"""
+
+        try:
+            with self.rate_limiter:
+                response = self._call_claude_simple(prompt)
+                career_data = json.loads(response)
+                if career_data.get('careerHistory'):
+                    result["careerHistory"] = career_data['careerHistory']
+                    result["sources"].append({
+                        "sourceName": "Wikipedia",
+                        "sourceUrl": wiki.get('url', ''),
+                        "reliability": "high"
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to extract career history for {person.get('name', '')}: {e}")
+
+        self.cache[cache_key] = result
+        self._save_cache()
+        return result
+
+    def _enhance_biography(self, person: Dict, wiki: Dict) -> Dict:
+        """
+        Create English biography from Wikipedia data only.
+        No AI inference - only use reliable sources.
+        """
+        cache_key = f"{person.get('name', '')}_bio"
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+
+        result = {
+            "bio": "",
+            "sources": []
+        }
+
+        if not wiki:
+            self.cache[cache_key] = result
+            self._save_cache()
+            return result
+
+        # Get relevant text chunks - prioritize biographical sections
+        wiki_extract = self._get_relevant_text(
+            wiki,
+            keywords=['born', 'early life', 'career', 'education', 'political'],
+            max_chars=4000  # Larger for biography
+        )
+
+        if not wiki_extract:
+            self.cache[cache_key] = result
+            self._save_cache()
+            return result
+
+        # Use AI to create English biography from Wikipedia text
+        prompt = f"""Based ONLY on the following Wikipedia text, write an English biography.
+
+Person: {person.get('name', '')}
+Chinese Name: {person.get('ChineseName', '')}
+Current Role: {person.get('currentRole', '')}
+
+Wikipedia text:
+{wiki_extract}
+
+Respond with ONLY a JSON object in this exact format:
+{{
+  "bio": "Write a 200-500 word English biography. Empty string if insufficient information."
+}}
+
+IMPORTANT:
+- Only use information explicitly mentioned in the Wikipedia text
+- Do not infer, assume, or add information not present
+- Write in neutral, encyclopedic tone
+- Focus on political career and achievements
+- If Wikipedia text is too short or lacks information, return empty string ""
+- Keep between 200-500 words"""
+
+        try:
+            with self.rate_limiter:
+                response = self._call_claude_simple(prompt)
+                bio_data = json.loads(response)
+                if bio_data.get('bio'):
+                    result["bio"] = bio_data['bio']
+                    result["sources"].append({
+                        "sourceName": "Wikipedia",
+                        "sourceUrl": wiki.get('url', ''),
+                        "reliability": "high"
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to create biography for {person.get('name', '')}: {e}")
+
+        self.cache[cache_key] = result
+        self._save_cache()
+        return result
+
+    def _extract_organization(self, person: Dict, wiki: Dict) -> Dict:
+        """
+        Extract current organization from Wikipedia data only.
+        No AI inference - only use reliable sources.
+        """
+        cache_key = f"{person.get('name', '')}_organization"
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+
+        result = {
+            "organization": "",
+            "sources": []
+        }
+
+        current_role = person.get('currentRole', '')
+
+        if not wiki:
+            self.cache[cache_key] = result
+            self._save_cache()
+            return result
+
+        # Get relevant text chunks - prioritize intro and recent career sections
+        wiki_extract = self._get_relevant_text(
+            wiki,
+            keywords=['current', 'serves', 'member', 'senator', 'representative', current_role.lower()],
+            max_chars=2000
+        )
+
+        if not wiki_extract:
+            self.cache[cache_key] = result
+            self._save_cache()
+            return result
+
+        # Use AI to extract organization from Wikipedia text
+        prompt = f"""Based ONLY on the following Wikipedia text, extract the current organization/institution this person works for.
+
+Person: {person.get('name', '')}
+Current Role: {current_role}
+
+Wikipedia text:
+{wiki_extract}
+
+Respond with ONLY a JSON object in this exact format:
+{{
+  "organization": "Full official name of the organization (e.g., 'White House', 'U.S. Department of State', 'U.S. Senate'). Empty string if no current organization found."
+}}
+
+IMPORTANT:
+- Extract the CURRENT organization where this person works
+- Use the official English name of the organization
+- Only extract information explicitly mentioned in the Wikipedia text
+- Common organizations: White House, U.S. Senate, U.S. House of Representatives, U.S. Department of [Name], CIA, FBI, etc.
+- If the person is retired or no current position mentioned, return empty string ""
+- Do not infer or guess - only extract what is clearly stated"""
+
+        try:
+            with self.rate_limiter:
+                response = self._call_claude_simple(prompt)
+                org_data = json.loads(response)
+                if org_data.get('organization'):
+                    result["organization"] = org_data['organization']
+                    result["sources"].append({
+                        "sourceName": "Wikipedia",
+                        "sourceUrl": wiki.get('url', ''),
+                        "reliability": "high"
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to extract organization for {person.get('name', '')}: {e}")
+
+        self.cache[cache_key] = result
+        self._save_cache()
+        return result
+
+    def _call_claude_simple(self, prompt: str) -> str:
+        """
+        Simple API call for single-stage processing.
+        Returns raw text response.
+        """
+        response = self.client.chat.completions.create(
             model=self.model,
-            max_tokens=8000,
-            temperature=0.3,  # Lower temperature for more consistent structured output
+            max_tokens=2000,
+            temperature=0.1,  # Very low temperature for factual extraction
             messages=[{
                 "role": "user",
                 "content": prompt
             }]
         )
 
-        # Extract text from response
-        response_text = response.content[0].text.strip()
+        response_text = response.choices[0].message.content.strip()
 
-        # Parse JSON response
-        try:
-            # Remove markdown code blocks if present
-            if response_text.startswith("```"):
-                # Extract content between ```json and ```
-                lines = response_text.split("\n")
-                response_text = "\n".join(lines[1:-1])
+        # Remove markdown code blocks if present
+        if response_text.startswith("```"):
+            lines = response_text.split("\n")
+            response_text = "\n".join(lines[1:-1])
 
-            enhanced_data = json.loads(response_text)
+        return response_text
 
-            # Validate response structure
-            if not isinstance(enhanced_data, list):
-                raise ValueError("Response is not a JSON array")
-
-            if len(enhanced_data) != expected_count:
-                logger.warning(
-                    f"Expected {expected_count} people, got {len(enhanced_data)}"
-                )
-
-            logger.info(f"Successfully parsed {len(enhanced_data)} enhanced records")
-            return enhanced_data
-
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response: {e}")
-            logger.debug(f"Response text: {response_text[:500]}")
-            raise
-
-    def _create_degraded_response(self, people: List[Dict]) -> List[Dict]:
-        """
-        Create minimal response when API fails.
-
-        Uses original data with basic transformations.
-        """
-        logger.warning("Creating degraded response due to API failure")
-
-        degraded = []
-        for person in people:
-            enhanced = {
-                "name": person.get('name', ''),
-                "dateOfBirth": None,
-                "gender": self._infer_gender_from_chinese(person.get('bio_chinese', '')),
-                "education": "",
-                "careerHistory": person.get('currentRole', ''),
-                "bio": person.get('bio_chinese', ''),  # Use Chinese bio as fallback
-                "sources": [{
-                    "sourceName": "Original CSV Data",
-                    "sourceUrl": "",
-                    "reliability": "medium"
-                }]
-            }
-            degraded.append(enhanced)
-
-        return degraded
-
-    def _infer_gender_from_chinese(self, text: str) -> str:
-        """Infer gender from Chinese text based on pronouns."""
-        if '她' in text:
-            return 'female'
-        elif '他' in text:
-            return 'male'
-        return 'other'
+    # Legacy methods - kept for reference but no longer used
+    # The new implementation uses _enhance_basic_info, _enhance_education,
+    # _enhance_career_history, and _enhance_biography instead
 
     def enhance_single(self, person: Dict, wikipedia_data: Dict = None) -> Dict:
         """
@@ -267,7 +585,15 @@ Please respond with ONLY the JSON array, no additional text."""
         """
         wiki_dict = {person.get('name'): wikipedia_data} if wikipedia_data else {}
         result = self.enhance_batch([person], wiki_dict)
-        return result[0] if result else self._create_degraded_response([person])[0]
+        return result[0] if result else {
+            "name": person.get('name', ''),
+            "dateOfBirth": None,
+            "gender": "",
+            "education": "",
+            "careerHistory": "",
+            "bio": "",
+            "sources": []
+        }
 
 
 def test_ai_enhancer():

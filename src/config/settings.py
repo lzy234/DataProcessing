@@ -6,8 +6,10 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from config/.env
+_config_dir = Path(__file__).parent.parent.parent / "config"
+_env_file = _config_dir / ".env"
+load_dotenv(_env_file, override=True)  # Override system env vars with .env file
 
 
 class Settings:
@@ -25,6 +27,7 @@ class Settings:
 
     # Claude API
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+    ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", None)
 
     # Rate limits
     MAX_CLAUDE_REQUESTS_PER_MINUTE = int(os.getenv("MAX_CLAUDE_REQUESTS_PER_MINUTE", "50"))

@@ -223,7 +223,7 @@ class RelationshipMapper:
         Map person -> organization relationships.
 
         Args:
-            people: List of people with organization_text field
+            people: List of people with organization field (from AI extraction)
 
         Returns:
             Updated people with organization ID field
@@ -232,18 +232,11 @@ class RelationshipMapper:
 
         for person in people:
             person_copy = person.copy()
-            org_text = person.get('organization_text', '')
+            # Use AI-extracted organization name directly
+            org_name = person.get('organization', '').strip()
 
-            if org_text:
-                # Extract organization name
-                from src.processors.entity_recognizer import EntityRecognizer
-                recognizer = EntityRecognizer()
-                org = recognizer.extract_organization(org_text)
-
-                if org and org['name'] in self.organization_ids:
-                    person_copy['organization'] = self.organization_ids[org['name']]
-                else:
-                    person_copy['organization'] = None
+            if org_name and org_name in self.organization_ids:
+                person_copy['organization'] = self.organization_ids[org_name]
             else:
                 person_copy['organization'] = None
 

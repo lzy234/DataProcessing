@@ -1,9 +1,15 @@
 """Main pipeline orchestrating the data processing workflow."""
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Dict, List
 from tqdm import tqdm
+
+# Add project root to path if running from src directory
+_project_root = Path(__file__).parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 from src.utils.logger import logger, setup_logger
 from src.config.settings import Settings
@@ -230,7 +236,7 @@ class DataProcessingPipeline:
         # Update with AI-enhanced fields
         ai_fields = [
             'dateOfBirth', 'gender', 'education',
-            'careerHistory', 'bio', 'sources'
+            'careerHistory', 'bio', 'organization', 'sources'
         ]
 
         for field in ai_fields:
@@ -250,10 +256,61 @@ class DataProcessingPipeline:
         Returns:
             Normalized entities with IDs and relationships
         """
+        # Step 3.0: Extract organizations from AI-enhanced people data
+        logger.info("Step 3.0: Extracting organizations from AI-enhanced data")
+        organizations_from_ai = self._extract_organizations_from_people(people)
+        logger.info(f"Extracted {len(organizations_from_ai)} unique organizations from AI data")
+
+        # Step 3.0.3: Deduplicate organizations using AI
+        logger.info("\nStep 3.0.3: Deduplicating organizations with AI")
+        org_name_mapping = {}  # original_name -> canonical_name
+        if Settings.ANTHROPIC_API_KEY and len(organizations_from_ai) > 1:
+            from src.processors.organization_deduplicator import OrganizationDeduplicator
+            deduplicator = OrganizationDeduplicator()
+            organizations_from_ai, org_name_mapping = deduplicator.deduplicate_organizations(
+                organizations_from_ai
+            )
+            logger.info(f"After deduplication: {len(organizations_from_ai)} organizations")
+
+            # Update people's organization field with canonical names
+            for person in people:
+                original_org = person.get('organization', '').strip()
+                if original_org and original_org in org_name_mapping:
+                    canonical_org = org_name_mapping[original_org]
+                    if original_org != canonical_org:
+                        logger.debug(f"Updated {person.get('name')}'s org: {original_org} -> {canonical_org}")
+                        person['organization'] = canonical_org
+
+        # Step 3.0.5: Analyze organization hierarchies using AI
+        logger.info("\nStep 3.0.5: Analyzing organization hierarchies with AI")
+        if Settings.ANTHROPIC_API_KEY and organizations_from_ai:
+            from src.processors.organization_hierarchy import OrganizationHierarchyAnalyzer
+            hierarchy_analyzer = OrganizationHierarchyAnalyzer()
+
+            # Prepare Wikipedia data for context
+            wiki_data_for_hierarchy = {}
+            for person in people:
+                name = person.get('name', '')
+                if person.get('wikipedia_extract'):
+                    wiki_data_for_hierarchy[name] = {
+                        'extract': person.get('wikipedia_extract'),
+                        'url': person.get('wikipedia_url')
+                    }
+
+            hierarchies = hierarchy_analyzer.analyze_batch_hierarchies(
+                organizations_from_ai,
+                wiki_data_for_hierarchy
+            )
+
+            # Apply hierarchies to organizations
+            for org_name, org_data in organizations_from_ai.items():
+                if org_name in hierarchies:
+                    org_data['parentOrganization'] = hierarchies[org_name]
+
         logger.info("Step 3.1: Assigning unique IDs")
         normalized = self.relationship_mapper.assign_all_ids(
             people,
-            entities['organizations'],
+            organizations_from_ai,
             entities['parties'],
             entities['sectors']
         )
@@ -279,6 +336,37 @@ class DataProcessingPipeline:
         })
 
         return normalized
+
+    def _extract_organizations_from_people(self, people: List[Dict]) -> Dict[str, Dict]:
+        """
+        Extract unique organizations from AI-enhanced people data.
+
+        Args:
+            people: List of people with AI-extracted organization field
+
+        Returns:
+            Dictionary of organizations keyed by name
+        """
+        organizations = {}
+
+        for person in people:
+            org_name = person.get('organization', '').strip()
+            if org_name and org_name not in organizations:
+                # Create organization entry
+                # Infer sector based on organization name
+                from src.processors.entity_recognizer import EntityRecognizer
+                recognizer = EntityRecognizer()
+                sector = recognizer.infer_sector(org_name)
+
+                organizations[org_name] = {
+                    'name': org_name,
+                    'chineseName': None,  # Not available from AI extraction
+                    'sector': sector['name'] if sector else None,
+                    'parentOrganization': None,  # Will be filled by AI hierarchy analysis
+                    'description': f"Political organization: {org_name}"
+                }
+
+        return organizations
 
     def _phase4_validation_export(self, entities: Dict) -> tuple[Dict, Dict]:
         """

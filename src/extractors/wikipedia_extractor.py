@@ -1,4 +1,4 @@
-"""Wikipedia data extraction using the REST API."""
+"""Wikipedia data extraction using the MediaWiki API."""
 import json
 import requests
 from typing import Dict, Optional, List
@@ -6,20 +6,22 @@ from src.utils.logger import logger
 from src.utils.retry import retry_with_backoff
 from src.utils.rate_limiter import RateLimiter
 from src.config.settings import Settings
+from src.processors.text_preprocessor import TextPreprocessor
+from src.processors.text_chunker import TextChunker
 
 
 class WikipediaExtractor:
     """
-    Extract biographical data from Wikipedia using the REST API.
+    Extract biographical data from Wikipedia using the MediaWiki API.
 
     Uses:
-    - Search API to find person pages
-    - Summary API to get biographical info
+    - MediaWiki Search API to find person pages
+    - MediaWiki Query API to get biographical info
     """
 
     def __init__(self):
         """Initialize Wikipedia extractor with rate limiter."""
-        self.base_url = "https://en.wikipedia.org/api/rest_v1"
+        self.api_url = "https://en.wikipedia.org/w/api.php"
         self.rate_limiter = RateLimiter(
             max_calls=Settings.MAX_WIKIPEDIA_REQUESTS_PER_MINUTE,
             period=60
@@ -31,11 +33,18 @@ class WikipediaExtractor:
 
         # User agent for Wikipedia API (required by their terms)
         self.headers = {
-            'User-Agent': 'DataProcessingBot/1.0 (Educational Project)',
-            'Accept': 'application/json'
+            'User-Agent': 'DataProcessingBot/1.0 (Educational Project)'
         }
 
-        logger.info("Initialized WikipediaExtractor")
+        # Initialize preprocessor and chunker
+        self.preprocessor = TextPreprocessor()
+        self.chunker = TextChunker(
+            max_chunk_size=2000,  # 2000 chars per chunk
+            min_chunk_size=500,
+            overlap=100
+        )
+
+        logger.info("Initialized WikipediaExtractor (MediaWiki API)")
 
     def _load_cache(self) -> Dict:
         """Load cached Wikipedia data."""
@@ -87,20 +96,37 @@ class WikipediaExtractor:
                 self._save_cache()
                 return None
 
-            # Step 2: Get page summary
-            summary = self._get_page_summary(page_title)
-            if not summary:
-                logger.warning(f"Failed to get summary for {page_title}")
+            # Step 2: Get page full content
+            page_data = self._get_page_summary(page_title)
+            if not page_data:
+                logger.warning(f"Failed to get content for {page_title}")
                 self.cache[name] = None
                 self._save_cache()
                 return None
 
-            # Extract relevant information
-            wiki_data = self._extract_bio_data(summary, name)
+            # Extract and preprocess biographical data
+            wiki_data = self._extract_bio_data(page_data, name)
+
+            # Preprocess the text (clean and structure)
+            wiki_data = self.preprocessor.preprocess(wiki_data)
+
+            # Create intelligent chunks
+            chunks = self.chunker.chunk_text(wiki_data['extract'], name)
+
+            # Prioritize most relevant chunks
+            prioritized_chunks = self.chunker.prioritize_chunks(chunks, max_chunks=5)
+
+            # Add chunks to wiki_data
+            wiki_data['chunks'] = prioritized_chunks
+            wiki_data['total_chunks'] = len(chunks)
+            wiki_data['text_length'] = len(wiki_data['extract'])
 
             # Cache the result
             self.cache[name] = wiki_data
             self._save_cache()
+
+            logger.info(f"Fetched Wikipedia data for {name}: {len(chunks)} chunks, "
+                       f"{wiki_data['text_length']} chars")
 
             return wiki_data
 
@@ -111,7 +137,7 @@ class WikipediaExtractor:
     @retry_with_backoff(max_retries=3, exceptions=(requests.RequestException,))
     def _search_person(self, name: str) -> Optional[str]:
         """
-        Search Wikipedia for a person's page.
+        Search Wikipedia for a person's page using MediaWiki API.
 
         Args:
             name: Person's name
@@ -119,17 +145,24 @@ class WikipediaExtractor:
         Returns:
             Page title if found, None otherwise
         """
-        search_url = f"{self.base_url}/page/search/{requests.utils.quote(name)}"
+        params = {
+            'action': 'query',
+            'list': 'search',
+            'srsearch': name,
+            'format': 'json',
+            'srlimit': 1
+        }
 
         with self.rate_limiter:
-            response = requests.get(search_url, headers=self.headers, timeout=10)
+            response = requests.get(self.api_url, params=params, headers=self.headers, timeout=10)
             response.raise_for_status()
 
         data = response.json()
 
-        # Get first result
-        if data.get('pages') and len(data['pages']) > 0:
-            page_title = data['pages'][0]['title']
+        # Get first search result
+        search_results = data.get('query', {}).get('search', [])
+        if search_results:
+            page_title = search_results[0]['title']
             logger.debug(f"Found Wikipedia page: {page_title}")
             return page_title
 
@@ -138,29 +171,143 @@ class WikipediaExtractor:
     @retry_with_backoff(max_retries=3, exceptions=(requests.RequestException,))
     def _get_page_summary(self, page_title: str) -> Optional[Dict]:
         """
-        Get page summary data.
+        Get page FULL content using MediaWiki Parse API.
+
+        The extracts API is limited and only returns intro text.
+        We use the parse API to get the full parsed content.
 
         Args:
             page_title: Wikipedia page title
 
         Returns:
-            Summary data dictionary
+            Page data dictionary with full extract, description, url
         """
-        summary_url = f"{self.base_url}/page/summary/{requests.utils.quote(page_title)}"
+        # Step 1: Get page info and URL
+        info_params = {
+            'action': 'query',
+            'prop': 'info',
+            'titles': page_title,
+            'format': 'json',
+            'inprop': 'url'
+        }
 
         with self.rate_limiter:
-            response = requests.get(summary_url, headers=self.headers, timeout=10)
+            response = requests.get(self.api_url, params=info_params, headers=self.headers, timeout=30)
             response.raise_for_status()
 
         data = response.json()
-        return data
+        pages = data.get('query', {}).get('pages', {})
+
+        if not pages:
+            return None
+
+        page_info = next(iter(pages.values()))
+        page_id = page_info.get('pageid')
+        full_url = page_info.get('fullurl', '')
+
+        # Step 2: Use parse API to get full text content
+        parse_params = {
+            'action': 'parse',
+            'pageid': page_id,
+            'prop': 'text|sections',
+            'format': 'json',
+            'formatversion': 2  # Use newer format
+        }
+
+        with self.rate_limiter:
+            response = requests.get(self.api_url, params=parse_params, headers=self.headers, timeout=30)
+            response.raise_for_status()
+
+        parse_data = response.json()
+
+        if 'parse' not in parse_data:
+            logger.warning(f"No parse data for {page_title}")
+            return None
+
+        parse_result = parse_data['parse']
+        html_content = parse_result.get('text', '')
+
+        # Convert HTML to plain text
+        import re
+        from html.parser import HTMLParser
+
+        class HTMLToText(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.text = []
+                self.skip = False
+                self.in_heading = False
+                self.heading_level = 0
+
+            def handle_starttag(self, tag, attrs):
+                # Skip navigation, references, tables, etc.
+                if tag in ['table', 'style', 'script']:
+                    self.skip = True
+                # Check for class attributes to skip
+                for attr, value in attrs:
+                    if attr == 'class' and any(skip_class in value for skip_class in
+                                              ['navbox', 'reflist', 'references', 'infobox',
+                                               'mbox', 'ambox', 'catlinks', 'printfooter']):
+                        self.skip = True
+                        break
+                # Mark headings with == markers for section parsing
+                if tag == 'h2':
+                    self.text.append('\n\n== ')
+                    self.in_heading = True
+                    self.heading_level = 2
+                elif tag == 'h3':
+                    self.text.append('\n\n=== ')
+                    self.in_heading = True
+                    self.heading_level = 3
+
+            def handle_endtag(self, tag):
+                if tag in ['table', 'style', 'script']:
+                    self.skip = False
+                elif tag in ['p', 'div', 'li']:
+                    self.text.append('\n')
+                elif tag == 'h2' and self.in_heading:
+                    self.text.append(' ==\n')
+                    self.in_heading = False
+                elif tag == 'h3' and self.in_heading:
+                    self.text.append(' ===\n')
+                    self.in_heading = False
+
+            def handle_data(self, data):
+                if not self.skip:
+                    # Clean up text
+                    cleaned = data.strip()
+                    if cleaned:
+                        self.text.append(cleaned)
+                        if not self.in_heading:
+                            self.text.append(' ')
+
+        parser = HTMLToText()
+        parser.feed(html_content)
+        plain_text = ''.join(parser.text)
+
+        # Clean up text
+        plain_text = re.sub(r'\n{3,}', '\n\n', plain_text)  # Remove excess newlines
+        plain_text = re.sub(r'  +', ' ', plain_text)  # Remove excess spaces
+        plain_text = plain_text.strip()
+
+        # Build result similar to old format
+        result = {
+            'pageid': page_id,
+            'title': page_title,
+            'extract': plain_text,
+            'fullurl': full_url
+        }
+
+        logger.debug(f"Fetched full content for {page_title}: {len(plain_text)} chars")
+
+        return result
 
     def _extract_bio_data(self, summary: Dict, person_name: str) -> Dict:
         """
         Extract relevant biographical data from Wikipedia summary.
 
         Args:
-            summary: Wikipedia summary data
+            summary: Wikipedia summary data from MediaWiki API
             person_name: Person's name
 
         Returns:
@@ -169,17 +316,22 @@ class WikipediaExtractor:
         bio_data = {
             'name': person_name,
             'wikipedia_title': summary.get('title', ''),
-            'url': summary.get('content_urls', {}).get('desktop', {}).get('page', ''),
-            'extract': summary.get('extract', ''),  # First paragraph
-            'description': summary.get('description', ''),
+            'url': summary.get('fullurl', ''),
+            'extract': summary.get('extract', ''),  # Full intro section
+            'description': '',  # MediaWiki doesn't provide short description in this endpoint
             'birth_date': None,
             'education': None
         }
 
-        # Try to extract birth date from description or extract
+        # Try to extract birth date from extract text
         birth_date = self._extract_birth_date(summary)
         if birth_date:
             bio_data['birth_date'] = birth_date
+
+        # Try to extract education info
+        education = self._extract_education(summary)
+        if education:
+            bio_data['education'] = education
 
         return bio_data
 
@@ -187,10 +339,11 @@ class WikipediaExtractor:
         """
         Try to extract birth date from Wikipedia data.
 
-        Common patterns:
+        Common patterns in Wikipedia extracts:
         - "born January 15, 1970"
+        - "born 15 January 1970" (British format)
+        - "(born January 15, 1970)"
         - "b. 1970"
-        - "(1970-01-15)"
 
         Args:
             summary: Wikipedia summary data
@@ -201,10 +354,10 @@ class WikipediaExtractor:
         import re
         from datetime import datetime
 
-        text = summary.get('extract', '') + ' ' + summary.get('description', '')
+        text = summary.get('extract', '')
 
-        # Pattern 1: "born Month Day, Year" or "b. Month Day, Year"
-        pattern1 = r'born?\s+([A-Z][a-z]+)\s+(\d{1,2}),?\s+(\d{4})'
+        # Pattern 1: "born Month Day, Year" (American format)
+        pattern1 = r'born\s+([A-Z][a-z]+)\s+(\d{1,2}),?\s+(\d{4})'
         match = re.search(pattern1, text, re.IGNORECASE)
         if match:
             try:
@@ -215,19 +368,70 @@ class WikipediaExtractor:
             except ValueError:
                 pass
 
-        # Pattern 2: "(YYYY-MM-DD)"
-        pattern2 = r'\((\d{4})-(\d{2})-(\d{2})\)'
-        match = re.search(pattern2, text)
+        # Pattern 2: "born Day Month Year" (British format)
+        pattern2 = r'born\s+(\d{1,2})\s+([A-Z][a-z]+)\s+(\d{4})'
+        match = re.search(pattern2, text, re.IGNORECASE)
         if match:
-            year, month, day = match.groups()
-            return f"{year}-{month}-{day}"
+            try:
+                day, month_name, year = match.groups()
+                date_str = f"{month_name} {day} {year}"
+                dt = datetime.strptime(date_str, "%B %d %Y")
+                return dt.strftime("%Y-%m-%d")
+            except ValueError:
+                pass
 
         # Pattern 3: "born YYYY"
-        pattern3 = r'born?\s+(\d{4})'
+        pattern3 = r'born\s+(\d{4})'
         match = re.search(pattern3, text, re.IGNORECASE)
         if match:
             year = match.group(1)
             return f"{year}-01-01"  # Default to January 1st
+
+        return None
+
+    def _extract_education(self, summary: Dict) -> Optional[str]:
+        """
+        Try to extract education information from Wikipedia data.
+
+        Args:
+            summary: Wikipedia summary data
+
+        Returns:
+            Education summary string or None
+        """
+        import re
+
+        text = summary.get('extract', '')
+
+        # Look for education-related keywords
+        education_keywords = [
+            r'graduated from ([^.,;]+)',
+            r'attended ([^.,;]+)',
+            r'studied at ([^.,;]+)',
+            r'degree from ([^.,;]+)',
+            r'education at ([^.,;]+)',
+            r'alma mater[:\s]+([^.,;]+)'
+        ]
+
+        education_info = []
+        for pattern in education_keywords:
+            matches = re.finditer(pattern, text, re.IGNORECASE)
+            for match in matches:
+                school = match.group(1).strip()
+                if school and len(school) < 100:  # Reasonable length
+                    education_info.append(school)
+
+        if education_info:
+            # Remove duplicates while preserving order
+            unique_education = []
+            seen = set()
+            for edu in education_info:
+                edu_lower = edu.lower()
+                if edu_lower not in seen:
+                    seen.add(edu_lower)
+                    unique_education.append(edu)
+
+            return "; ".join(unique_education)
 
         return None
 
