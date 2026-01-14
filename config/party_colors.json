@@ -1,0 +1,22 @@
+{
+  "parties": [
+    {
+      "name": "Democratic Party",
+      "abbreviation": "D",
+      "color": "#0015BC",
+      "aliases": ["Democratic", "Democrat", "DEM", "D", "民主党"]
+    },
+    {
+      "name": "Republican Party",
+      "abbreviation": "R",
+      "color": "#E81B23",
+      "aliases": ["Republican", "GOP", "R", "共和党"]
+    },
+    {
+      "name": "Independent",
+      "abbreviation": "I",
+      "color": "#808080",
+      "aliases": ["IND", "Independent", "I", "无党派", "独立"]
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "sectors": [
+    {
+      "name": "Government - Executive",
+      "category": "gov",
+      "keywords": ["White House", "President", "Cabinet", "Executive", "Administration", "白宫", "总统"],
+      "description": "Executive branch of federal government"
+    },
+    {
+      "name": "Government - Legislative",
+      "category": "gov",
+      "keywords": ["Senate", "House", "Congress", "Committee", "参议院", "众议院", "国会"],
+      "description": "U.S. Congress and related bodies"
+    },
+    {
+      "name": "Government - Judicial",
+      "category": "gov",
+      "keywords": ["Supreme Court", "Court", "Justice", "Judicial", "最高法院", "法院", "大法官"],
+      "description": "Federal judiciary"
+    },
+    {
+      "name": "Government - Federal Reserve",
+      "category": "gov",
+      "keywords": ["Federal Reserve", "Fed", "Central Bank", "美联储"],
+      "description": "Federal Reserve System"
+    },
+    {
+      "name": "Government - State",
+      "category": "gov",
+      "keywords": ["Governor", "State", "州长", "州政府"],
+      "description": "State governments"
+    },
+    {
+      "name": "Government - City",
+      "category": "gov",
+      "keywords": ["Mayor", "City", "市长", "市政府"],
+      "description": "City governments"
+    },
+    {
+      "name": "Finance",
+      "category": "external",
+      "keywords": ["Bank", "Investment", "Capital", "Financial", "JPMorgan", "Goldman", "银行", "金融", "投资"],
+      "description": "Financial services and banking"
+    },
+    {
+      "name": "Technology",
+      "category": "external",
+      "keywords": ["Tech", "AI", "Software", "Computing", "Tesla", "Apple", "Google", "Microsoft", "科技", "技术"],
+      "description": "Technology companies and startups"
+    },
+    {
+      "name": "Media",
+      "category": "external",
+      "keywords": ["News", "Media", "Broadcasting", "Network", "Times", "Journal", "CNN", "Fox", "媒体", "新闻"],
+      "description": "News media and journalism"
+    },
+    {
+      "name": "Think Tank",
+      "category": "external",
+      "keywords": ["Foundation", "Institute", "Center", "Council", "智库", "基金会", "研究所"],
+      "description": "Think tanks and research organizations"
+    },
+    {
+      "name": "Non-Profit",
+      "category": "external",
+      "keywords": ["ACLU", "Non-profit", "Nonprofit", "Association", "非营利", "协会"],
+      "description": "Non-profit organizations"
+    }
+  ]
+}
