@@ -1,0 +1,238 @@
+{
+  "Organizations": {
+    "original": {
+      "total_rows": 51,
+      "fields": {
+        "id": {
+          "filled": 51,
+          "total": 51,
+          "completeness": 100.0
+        },
+        "name": {
+          "filled": 51,
+          "total": 51,
+          "completeness": 100.0
+        },
+        "parentOrganization": {
+          "filled": 0,
+          "total": 51,
+          "completeness": 0.0
+        },
+        "sector": {
+          "filled": 44,
+          "total": 51,
+          "completeness": 86.27450980392157
+        },
+        "description": {
+          "filled": 51,
+          "total": 51,
+          "completeness": 100.0
+        }
+      },
+      "overall": 71.56862745098039
+    },
+    "enhanced": {
+      "total_rows": 51,
+      "fields": {
+        "id": {
+          "filled": 51,
+          "total": 51,
+          "completeness": 100.0
+        },
+        "name": {
+          "filled": 51,
+          "total": 51,
+          "completeness": 100.0
+        },
+        "parentOrganization": {
+          "filled": 0,
+          "total": 51,
+          "completeness": 0.0
+        },
+        "sector": {
+          "filled": 51,
+          "total": 51,
+          "completeness": 100.0
+        },
+        "description": {
+          "filled": 51,
+          "total": 51,
+          "completeness": 100.0
+        }
+      },
+      "overall": 75.0
+    }
+  },
+  "People": {
+    "original": {
+      "total_rows": 100,
+      "fields": {
+        "id": {
+          "filled": 100,
+          "total": 100,
+          "completeness": 100.0
+        },
+        "name": {
+          "filled": 100,
+          "total": 100,
+          "completeness": 100.0
+        },
+        "ChineseName": {
+          "filled": 100,
+          "total": 100,
+          "completeness": 100.0
+        },
+        "dateOfBirth": {
+          "filled": 93,
+          "total": 100,
+          "completeness": 93.0
+        },
+        "gender": {
+          "filled": 95,
+          "total": 100,
+          "completeness": 95.0
+        },
+        "currentRole": {
+          "filled": 100,
+          "total": 100,
+          "completeness": 100.0
+        },
+        "organization": {
+          "filled": 71,
+          "total": 100,
+          "completeness": 71.0
+        },
+        "party": {
+          "filled": 0,
+          "total": 100,
+          "completeness": 0.0
+        },
+        "education": {
+          "filled": 93,
+          "total": 100,
+          "completeness": 93.0
+        },
+        "careerHistory": {
+          "filled": 96,
+          "total": 100,
+          "completeness": 96.0
+        },
+        "bio": {
+          "filled": 95,
+          "total": 100,
+          "completeness": 95.0
+        },
+        "sources": {
+          "filled": 100,
+          "total": 100,
+          "completeness": 100.0
+        },
+        "slug": {
+          "filled": 100,
+          "total": 100,
+          "completeness": 100.0
+        }
+      },
+      "overall": 86.91666666666667
+    },
+    "enhanced": {
+      "total_rows": 100,
+      "fields": {
+        "id": {
+          "filled": 100,
+          "total": 100,
+          "completeness": 100.0
+        },
+        "name": {
+          "filled": 100,
+          "total": 100,
+          "completeness": 100.0
+        },
+        "ChineseName": {
+          "filled": 100,
+          "total": 100,
+          "completeness": 100.0
+        },
+        "dateOfBirth": {
+          "filled": 93,
+          "total": 100,
+          "completeness": 93.0
+        },
+        "gender": {
+          "filled": 95,
+          "total": 100,
+          "completeness": 95.0
+        },
+        "currentRole": {
+          "filled": 100,
+          "total": 100,
+          "completeness": 100.0
+        },
+        "organization": {
+          "filled": 72,
+          "total": 100,
+          "completeness": 72.0
+        },
+        "party": {
+          "filled": 53,
+          "total": 100,
+          "completeness": 53.0
+        },
+        "education": {
+          "filled": 93,
+          "total": 100,
+          "completeness": 93.0
+        },
+        "careerHistory": {
+          "filled": 96,
+          "total": 100,
+          "completeness": 96.0
+        },
+        "bio": {
+          "filled": 95,
+          "total": 100,
+          "completeness": 95.0
+        },
+        "sources": {
+          "filled": 100,
+          "total": 100,
+          "completeness": 100.0
+        },
+        "slug": {
+          "filled": 100,
+          "total": 100,
+          "completeness": 100.0
+        }
+      },
+      "overall": 91.41666666666667
+    }
+  },
+  "Sectors": {
+    "original": {
+      "total_rows": 9,
+      "fields": {
+        "id": {
+          "filled": 9,
+          "total": 9,
+          "completeness": 100.0
+        },
+        "name": {
+          "filled": 9,
+          "total": 9,
+          "completeness": 100.0
+        },
+        "category": {
+          "filled": 9,
+          "total": 9,
+          "completeness": 100.0
+        },
+        "description": {
+          "filled": 9,
+          "total": 9,
+          "completeness": 100.0
+        }
+      },
+      "overall": 100.0
+    }
+  }
+}

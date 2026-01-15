@@ -1,0 +1,52 @@
+﻿id,name,parentOrganization,sector,description
+O001,AFL–CIO,,SEC005,Political organization: AFL–CIO
+O002,Alphabet Inc.,,SEC005,Political organization: Alphabet Inc.
+O003,Amazon,,SEC005,Political organization: Amazon
+O004,American Civil Liberties Union,,SEC005,Political organization: American Civil Liberties Union
+O005,American Enterprise Institute,,SEC009,Political organization: American Enterprise Institute
+O006,Apple,,SEC008,Political organization: Apple
+O007,Bank of America,,SEC001,Political organization: Bank of America
+O008,BlackRock,,SEC005,Political organization: BlackRock
+O009,Bloomberg News,,SEC006,Political organization: Bloomberg News
+O010,Brookings Institution,,SEC005,Political organization: Brookings Institution
+O011,Center for American Progress,,SEC009,Political organization: Center for American Progress
+O012,Central Intelligence Agency,,SEC005,Political organization: Central Intelligence Agency
+O013,Chevron Corporation,,SEC005,Political organization: Chevron Corporation
+O014,Citigroup,,SEC005,Political organization: Citigroup
+O015,"City of Fort Worth, Texas",,SEC005,"Political organization: City of Fort Worth, Texas"
+O016,City of Houston,,SEC005,Political organization: City of Houston
+O017,Council on Foreign Relations,,SEC009,Political organization: Council on Foreign Relations
+O018,ExxonMobil,,SEC005,Political organization: ExxonMobil
+O019,Federal Reserve,,SEC003,Political organization: Federal Reserve
+O020,Fox News,,SEC006,Political organization: Fox News
+O021,Goldman Sachs,,SEC001,Political organization: Goldman Sachs
+O022,Heritage Foundation,,SEC009,Political organization: Heritage Foundation
+O023,JPMorgan Chase,,SEC001,Political organization: JPMorgan Chase
+O024,Massachusetts Institute of Technology (MIT),,SEC008,Political organization: Massachusetts Institute of Technology (MIT)
+O025,Meta Platforms,,SEC005,Political organization: Meta Platforms
+O026,Microsoft,,SEC008,Political organization: Microsoft
+O027,Morgan Stanley,,SEC005,Political organization: Morgan Stanley
+O028,National Rifle Association,,SEC007,Political organization: National Rifle Association
+O029,New York City Mayor's Office,,SEC005,Political organization: New York City Mayor's Office
+O030,Nvidia,,SEC005,Political organization: Nvidia
+O031,Office of Management and Budget,,SEC005,Political organization: Office of Management and Budget
+O032,OpenAI,,SEC008,Political organization: OpenAI
+O033,Planned Parenthood,,SEC005,Political organization: Planned Parenthood
+O034,Sierra Club,,SEC005,Political organization: Sierra Club
+O035,Southern Baptist Convention,,SEC005,Political organization: Southern Baptist Convention
+O036,State of Georgia,,SEC005,Political organization: State of Georgia
+O037,Supreme Court of the United States,,SEC004,Political organization: Supreme Court of the United States
+O038,The Wall Street Journal,,SEC006,Political organization: The Wall Street Journal
+O039,U.S. Department of Agriculture,,SEC005,Political organization: U.S. Department of Agriculture
+O040,U.S. Department of Energy,,SEC005,Political organization: U.S. Department of Energy
+O041,U.S. Department of Health and Human Services,,SEC005,Political organization: U.S. Department of Health and Human Services
+O042,U.S. Department of Homeland Security,,SEC005,Political organization: U.S. Department of Homeland Security
+O043,U.S. Department of State,,SEC002,Political organization: U.S. Department of State
+O044,U.S. Department of the Interior,,SEC005,Political organization: U.S. Department of the Interior
+O045,U.S. Department of the Treasury,,SEC005,Political organization: U.S. Department of the Treasury
+O046,U.S. House of Representatives,,SEC005,Political organization: U.S. House of Representatives
+O047,U.S. Senate,,SEC005,Political organization: U.S. Senate
+O048,UnitedHealth Group Inc,,SEC005,Political organization: UnitedHealth Group Inc
+O049,Walmart U.S.,,SEC005,Political organization: Walmart U.S.
+O050,Wells Fargo,,SEC005,Political organization: Wells Fargo
+O051,White House,,SEC002,Political organization: White House

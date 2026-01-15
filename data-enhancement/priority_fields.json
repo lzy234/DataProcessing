@@ -1,0 +1,54 @@
+{
+  "Organizations": [
+    {
+      "field": "parentOrganization",
+      "empty_count": 51,
+      "empty_rate": 100.0,
+      "sample_ids": [
+        "O001",
+        "O002",
+        "O003",
+        "O004",
+        "O005"
+      ]
+    },
+    {
+      "field": "sector",
+      "empty_count": 7,
+      "empty_rate": 13.725490196078432,
+      "sample_ids": [
+        "O015",
+        "O016",
+        "O029",
+        "O036",
+        "O043"
+      ]
+    }
+  ],
+  "People": [
+    {
+      "field": "party",
+      "empty_count": 100,
+      "empty_rate": 100.0,
+      "sample_ids": [
+        "P001",
+        "P002",
+        "P003",
+        "P004",
+        "P005"
+      ]
+    },
+    {
+      "field": "organization",
+      "empty_count": 29,
+      "empty_rate": 28.999999999999996,
+      "sample_ids": [
+        "P001",
+        "P005",
+        "P006",
+        "P008",
+        "P010"
+      ]
+    }
+  ]
+}

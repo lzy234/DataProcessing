@@ -1,0 +1,389 @@
+{
+  "Organizations": {
+    "total_rows": 51,
+    "field_stats": {
+      "id": {
+        "empty": 0,
+        "filled": 51,
+        "empty_ids": []
+      },
+      "name": {
+        "empty": 0,
+        "filled": 51,
+        "empty_ids": []
+      },
+      "parentOrganization": {
+        "empty": 51,
+        "filled": 0,
+        "empty_ids": [
+          "O001",
+          "O002",
+          "O003",
+          "O004",
+          "O005",
+          "O006",
+          "O007",
+          "O008",
+          "O009",
+          "O010",
+          "O011",
+          "O012",
+          "O013",
+          "O014",
+          "O015",
+          "O016",
+          "O017",
+          "O018",
+          "O019",
+          "O020",
+          "O021",
+          "O022",
+          "O023",
+          "O024",
+          "O025",
+          "O026",
+          "O027",
+          "O028",
+          "O029",
+          "O030",
+          "O031",
+          "O032",
+          "O033",
+          "O034",
+          "O035",
+          "O036",
+          "O037",
+          "O038",
+          "O039",
+          "O040",
+          "O041",
+          "O042",
+          "O043",
+          "O044",
+          "O045",
+          "O046",
+          "O047",
+          "O048",
+          "O049",
+          "O050",
+          "O051"
+        ]
+      },
+      "sector": {
+        "empty": 7,
+        "filled": 44,
+        "empty_ids": [
+          "O015",
+          "O016",
+          "O029",
+          "O036",
+          "O043",
+          "O046",
+          "O047"
+        ]
+      },
+      "description": {
+        "empty": 0,
+        "filled": 51,
+        "empty_ids": []
+      }
+    },
+    "fieldnames": [
+      "id",
+      "name",
+      "parentOrganization",
+      "sector",
+      "description"
+    ]
+  },
+  "People": {
+    "total_rows": 100,
+    "field_stats": {
+      "id": {
+        "empty": 0,
+        "filled": 100,
+        "empty_ids": []
+      },
+      "name": {
+        "empty": 0,
+        "filled": 100,
+        "empty_ids": []
+      },
+      "ChineseName": {
+        "empty": 0,
+        "filled": 100,
+        "empty_ids": []
+      },
+      "dateOfBirth": {
+        "empty": 7,
+        "filled": 93,
+        "empty_ids": [
+          "P047",
+          "P062",
+          "P065",
+          "P074",
+          "P075",
+          "P077",
+          "P083"
+        ]
+      },
+      "gender": {
+        "empty": 5,
+        "filled": 95,
+        "empty_ids": [
+          "P001",
+          "P033",
+          "P064",
+          "P077",
+          "P083"
+        ]
+      },
+      "currentRole": {
+        "empty": 0,
+        "filled": 100,
+        "empty_ids": []
+      },
+      "organization": {
+        "empty": 29,
+        "filled": 71,
+        "empty_ids": [
+          "P001",
+          "P005",
+          "P006",
+          "P008",
+          "P010",
+          "P012",
+          "P017",
+          "P019",
+          "P020",
+          "P051",
+          "P062",
+          "P064",
+          "P066",
+          "P067",
+          "P070",
+          "P071",
+          "P077",
+          "P084",
+          "P086",
+          "P087",
+          "P088",
+          "P089",
+          "P091",
+          "P092",
+          "P093",
+          "P094",
+          "P095",
+          "P097",
+          "P099"
+        ]
+      },
+      "party": {
+        "empty": 100,
+        "filled": 0,
+        "empty_ids": [
+          "P001",
+          "P002",
+          "P003",
+          "P004",
+          "P005",
+          "P006",
+          "P007",
+          "P008",
+          "P009",
+          "P010",
+          "P011",
+          "P012",
+          "P013",
+          "P014",
+          "P015",
+          "P016",
+          "P017",
+          "P018",
+          "P019",
+          "P020",
+          "P021",
+          "P022",
+          "P023",
+          "P024",
+          "P025",
+          "P026",
+          "P027",
+          "P028",
+          "P029",
+          "P030",
+          "P031",
+          "P032",
+          "P033",
+          "P034",
+          "P035",
+          "P036",
+          "P037",
+          "P038",
+          "P039",
+          "P040",
+          "P041",
+          "P042",
+          "P043",
+          "P044",
+          "P045",
+          "P046",
+          "P047",
+          "P048",
+          "P049",
+          "P050",
+          "P051",
+          "P052",
+          "P053",
+          "P054",
+          "P055",
+          "P056",
+          "P057",
+          "P058",
+          "P059",
+          "P060",
+          "P061",
+          "P062",
+          "P063",
+          "P064",
+          "P065",
+          "P066",
+          "P067",
+          "P068",
+          "P069",
+          "P070",
+          "P071",
+          "P072",
+          "P073",
+          "P074",
+          "P075",
+          "P076",
+          "P077",
+          "P078",
+          "P079",
+          "P080",
+          "P081",
+          "P082",
+          "P083",
+          "P084",
+          "P085",
+          "P086",
+          "P087",
+          "P088",
+          "P089",
+          "P090",
+          "P091",
+          "P092",
+          "P093",
+          "P094",
+          "P095",
+          "P096",
+          "P097",
+          "P098",
+          "P099",
+          "P100"
+        ]
+      },
+      "education": {
+        "empty": 7,
+        "filled": 93,
+        "empty_ids": [
+          "P016",
+          "P033",
+          "P064",
+          "P067",
+          "P071",
+          "P077",
+          "P083"
+        ]
+      },
+      "careerHistory": {
+        "empty": 4,
+        "filled": 96,
+        "empty_ids": [
+          "P033",
+          "P064",
+          "P077",
+          "P083"
+        ]
+      },
+      "bio": {
+        "empty": 5,
+        "filled": 95,
+        "empty_ids": [
+          "P016",
+          "P033",
+          "P053",
+          "P064",
+          "P077"
+        ]
+      },
+      "sources": {
+        "empty": 0,
+        "filled": 100,
+        "empty_ids": []
+      },
+      "slug": {
+        "empty": 0,
+        "filled": 100,
+        "empty_ids": []
+      }
+    },
+    "fieldnames": [
+      "id",
+      "name",
+      "ChineseName",
+      "dateOfBirth",
+      "gender",
+      "currentRole",
+      "organization",
+      "party",
+      "education",
+      "careerHistory",
+      "bio",
+      "sources",
+      "slug"
+    ]
+  },
+  "Parties": {
+    "total_rows": 0,
+    "field_stats": {},
+    "fieldnames": [
+      "id",
+      "name",
+      "abbreviation",
+      "color"
+    ]
+  },
+  "Sectors": {
+    "total_rows": 9,
+    "field_stats": {
+      "id": {
+        "empty": 0,
+        "filled": 9,
+        "empty_ids": []
+      },
+      "name": {
+        "empty": 0,
+        "filled": 9,
+        "empty_ids": []
+      },
+      "category": {
+        "empty": 0,
+        "filled": 9,
+        "empty_ids": []
+      },
+      "description": {
+        "empty": 0,
+        "filled": 9,
+        "empty_ids": []
+      }
+    },
+    "fieldnames": [
+      "id",
+      "name",
+      "category",
+      "description"
+    ]
+  }
+}
