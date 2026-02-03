@@ -32,6 +32,7 @@ src/
 │   └── __init__.py
 ├── processors/       # 数据处理模块
 │   ├── ai_enhancer.py              # AI增强处理
+│   ├── translator.py               # Deepseek API翻译器（新增）
 │   ├── entity_recognizer.py        # 实体识别
 │   ├── organization_deduplicator.py # 组织去重
 │   ├── organization_hierarchy.py    # 组织层级
@@ -50,7 +51,8 @@ src/
 │   ├── rate_limiter.py # 速率限制
 │   ├── retry.py        # 重试机制
 │   └── __init__.py
-└── main.py           # 主程序入口
+├── main.py           # 主程序入口
+└── translate_output.py # CSV翻译脚本（新增）
 ```
 
 ### 📊 data/ - 数据目录
@@ -75,7 +77,9 @@ data/
     ├── People.csv
     ├── Organizations.csv
     ├── Parties.csv
-    └── Sectors.csv
+    ├── Sectors.csv
+    ├── chinese/        # 中文版输出（新增）
+    └── translated/     # 翻译版本（_zh后缀）（新增）
 ```
 
 ### ⚙️ config/ - 配置目录
@@ -107,10 +111,13 @@ tests/
 
 ```
 scripts/
-├── check_progress.py      # 检查处理进度
-├── live_monitor.py        # 实时监控
-├── monitor_pipeline.py    # 管道监控
-└── quick_status.bat       # 快速状态检查
+├── check_progress.py           # 检查处理进度
+├── live_monitor.py             # 实时监控
+├── monitor_pipeline.py         # 管道监控
+├── quick_status.bat            # 快速状态检查
+├── csv_to_sqlite.py            # CSV转SQLite工具（新增）
+├── verify_database.py          # 数据库验证工具（新增）
+└── replace_with_translation.py # 翻译替换工具（新增）
 ```
 
 ### 📚 docs/ - 文档目录
@@ -120,6 +127,8 @@ scripts/
 docs/
 ├── PROJECT_STRUCTURE.md                 # 本文件
 ├── PROJECT_PROCESS_GUIDE.md            # 项目流程指南
+├── README_DATABASE.md                  # SQLite使用指南（新增）
+├── TRANSLATION_SUMMARY.md              # 翻译工作总结（新增）
 ├── ORGANIZATION_FEATURES_SUMMARY.md    # 组织功能总结
 ├── ORGANIZATION_DEDUPLICATION.md       # 组织去重文档
 ├── NEXT_STEPS.md                       # 后续步骤
@@ -208,6 +217,8 @@ MAX_CLAUDE_REQUESTS_PER_MINUTE=50
 - 忽略 `data/output/*`（生成文件）
 - 忽略 `__pycache__/`（Python缓存）
 - 忽略 `test_output/`（测试输出）
+- 忽略 `*.db` 和相关文件（数据库文件）（新增）
+- 忽略 `*.log`（日志文件）
 
 ### 提交指南
 - 提交前运行测试确保代码正常

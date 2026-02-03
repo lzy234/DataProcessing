@@ -24,6 +24,12 @@ data/output/*
 !data/intermediate/.gitkeep
 !data/output/.gitkeep
 
+# Database files
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
 # Test outputs
 test_output/
 
